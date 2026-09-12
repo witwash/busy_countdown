@@ -110,6 +110,47 @@ class Device:
     def brightness(self) -> Any:
         return self.get("/api/display/brightness")
 
+    # -- storage ----------------------------------------------------------
+    #
+    # On-device JavaScript apps live in /ext/user_assets/<app_id>/ and are
+    # picked up by the APPS menu. See reference/device-apps.md.
+
+    def storage_list(self, path: str) -> list[dict]:
+        return self.get("/api/storage/list", params={"path": path})["list"]
+
+    def storage_read(self, path: str) -> bytes:
+        return self.request("GET", "/api/storage/read", params={"path": path}).content
+
+    def storage_write(self, path: str, data: bytes) -> None:
+        self.request(
+            "POST",
+            "/api/storage/write",
+            params={"path": path},
+            headers={"Content-Type": "application/octet-stream"},
+            data=data,
+        )
+
+    def storage_mkdir(self, path: str) -> None:
+        """Create a directory. Succeeds quietly if it already exists."""
+        try:
+            self.request("POST", "/api/storage/mkdir", params={"path": path})
+        except DeviceError as exc:
+            if "400" not in str(exc):  # already exists reports 400
+                raise
+
+    def storage_remove(self, path: str) -> None:
+        self.request("DELETE", "/api/storage/remove", params={"path": path})
+
+    def storage_rmtree(self, path: str) -> None:
+        """Depth-first delete: the device only removes empty directories."""
+        for entry in self.storage_list(path):
+            child = f"{path}/{entry['name']}"
+            if entry["type"] == "dir":
+                self.storage_rmtree(child)
+            else:
+                self.storage_remove(child)
+        self.storage_remove(path)
+
     # -- assets and audio -------------------------------------------------
 
     def upload_asset(self, filename: str, data: bytes) -> None:

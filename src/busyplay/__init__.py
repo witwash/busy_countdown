@@ -4,11 +4,12 @@ Thin layer over the BUSY Bar HTTP API. Uses raw HTTP rather than `busylib`
 so that element types newer than the library (e.g. ``xpmbitmap``) still work.
 """
 
-from .device import Device, FRONT_H, FRONT_W, BACK_H, BACK_W, USB_ADDR
+from .device import Device, DeviceError, FRONT_H, FRONT_W, BACK_H, BACK_W, USB_ADDR
 from .screen import screenshot, save_png
 
 __all__ = [
     "Device",
+    "DeviceError",
     "screenshot",
     "save_png",
     "USB_ADDR",

@@ -1,9 +1,13 @@
 """Read what is actually on the BUSY Bar screen.
 
 ``GET /api/screen`` advertises ``Content-Type: image/bmp`` but in firmware
-1.2.3 / API 27.5.0 it returns **base64-encoded raw BGR888 pixels** with no
-image header: 72x16x3 bytes for the front display, 160x80x3 for the back.
-This module decodes that into a Pillow image so a script can verify its own
+1.2.3 / API 27.5.0 it returns **base64-encoded raw pixels** with no image
+header, and the two displays use different formats:
+
+- front (72x16 RGB): BGR888, 3 bytes per pixel -> 3456 bytes
+- back (160x80 greyscale): 4bpp packed, **two pixels per byte** -> 6400 bytes
+
+This module decodes both into Pillow images so a script can verify its own
 output instead of guessing.
 """
 
@@ -19,17 +23,34 @@ _SIZES = {0: (FRONT_W, FRONT_H), 1: (BACK_W, BACK_H)}
 
 
 def screenshot(dev: Device, display: int = 0) -> Image.Image:
-    """Capture a display. ``display``: 0 = front matrix, 1 = back screen."""
+    """Capture a display. ``display``: 0 = front matrix, 1 = back screen.
+
+    The front comes back as RGB; the back is greyscale, returned as an ``L``
+    image with the 4-bit levels scaled up to 0-255.
+    """
     if display not in _SIZES:
         raise ValueError("display must be 0 (front) or 1 (back)")
     width, height = _SIZES[display]
     raw = dev.request("GET", "/api/screen", params={"display": display}).content
     pixels = base64.b64decode(raw)
-    expected = width * height * 3
+
+    if display == 0:
+        expected = width * height * 3
+        if len(pixels) != expected:
+            raise ValueError(f"expected {expected} bytes of pixel data, got {len(pixels)}")
+        # Wire order is BGR, not RGB.
+        return Image.frombytes("RGB", (width, height), pixels, "raw", "BGR")
+
+    # Back screen: 4 bits per pixel, two pixels packed into each byte,
+    # high nibble first. 160*80/2 = 6400 bytes.
+    expected = width * height // 2
     if len(pixels) != expected:
         raise ValueError(f"expected {expected} bytes of pixel data, got {len(pixels)}")
-    # Wire order is BGR, not RGB.
-    return Image.frombytes("RGB", (width, height), pixels, "raw", "BGR")
+    unpacked = bytearray(width * height)
+    for i, byte in enumerate(pixels):
+        unpacked[i * 2] = (byte >> 4) * 17  # 0-15 -> 0-255
+        unpacked[i * 2 + 1] = (byte & 0x0F) * 17
+    return Image.frombytes("L", (width, height), bytes(unpacked))
 
 
 def save_png(img: Image.Image, path: str, scale: int = 8) -> str:

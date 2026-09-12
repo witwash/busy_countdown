@@ -124,12 +124,35 @@ either `path` (your asset) or `stock_path` (e.g. `shared/beep.snd`).
 `busylib.converter.convert_for_storage()` converts wav/png/gif into the
 device formats.
 
-## Reading the screen back — `GET /api/screen?display=0`
+## The BUSY / CUSTOM timer — `PUT /api/busy/profiles/{slot}`
+
+`slot` is `busy` or `custom` (not a number). A `SIMPLE` profile carries
+`total_time_ms`, and **the API enforces no minimum** — a 45-second CUSTOM
+profile is accepted, runs, and ends with the native "Well done!" screen, even
+though the on-device UI will not let you dial below 5 minutes.
+
+Tempting as a standalone short timer, but it is a *work session*, not a plain
+countdown: it applies a theme, can trigger smart-home actions, and syncs to
+the mobile app and cloud. `PUT` requires the full object, and
+`profile_timestamp_ms` decides which copy wins when syncing — stamp it to now.
+`tools/bb_timer.py` wraps this, including `backup` / `restore`.
+
+The front display shows the theme during a session, not a countdown; the
+remaining time and status live on the back screen.
+
+## Reading the screen back — `GET /api/screen?display=N`
 
 Undocumented quirk: the response advertises `Content-Type: image/bmp` but is
-actually **base64 text of raw BGR888 pixels**, with no image header —
-72*16*3 = 3456 bytes (4608 base64 chars) for the front display.
-Byte order is B, G, R. `busyplay.screen.screenshot()` handles this.
+actually **base64 text of raw pixels** with no image header, and the two
+displays use *different* formats:
+
+| display | format | bytes |
+|---|---|---|
+| 0 (front, 72x16 RGB) | BGR888, 3 bytes/px | 3456 |
+| 1 (back, 160x80 grey) | **4bpp packed, 2 px/byte**, high nibble first | 6400 |
+
+Assuming BGR888 for the back display decodes to garbage (or a length error).
+`busyplay.screen.screenshot()` handles both.
 
 Allow **~0.3 s** after a draw before capturing, or you read the previous
 frame. This makes a real verify loop possible: draw, capture, assert.

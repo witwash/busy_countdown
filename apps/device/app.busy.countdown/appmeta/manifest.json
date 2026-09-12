@@ -1,0 +1,10 @@
+{
+    "format_version": 1,
+    "id": "app.busy.countdown",
+    "name": "Countdown",
+    "version": "1.0.0",
+    "description": "3 minute countdown that keeps counting once it runs over. Sound at zero. Runs entirely on the device.",
+    "author": "busy_countdown playground",
+    "heap_size_kib": 48,
+    "debug": false
+}
